@@ -27,6 +27,41 @@ install(
   PROGRAMS scripts/robot_test.py
   DESTINATION lib/${PROJECT_NAME}
 )
+# DWA modules
+install(
+  PROGRAMS scripts/dwa_convert_global_path.py
+  DESTINATION lib/${PROJECT_NAME}
+)
+install(
+  PROGRAMS scripts/dwa_cost_evaluator.py
+  DESTINATION lib/${PROJECT_NAME}
+)
+install(
+  PROGRAMS scripts/dwa_data_provider.py
+  DESTINATION lib/${PROJECT_NAME}
+)
+install(
+  PROGRAMS scripts/dwa_executor.py
+  DESTINATION lib/${PROJECT_NAME}
+)
+install(
+  PROGRAMS scripts/dwa_node.py
+  DESTINATION lib/${PROJECT_NAME}
+)
+install(
+  PROGRAMS scripts/dwa_obstacle_cost.py
+  DESTINATION lib/${PROJECT_NAME}
+)
+install(
+  PROGRAMS scripts/dwa_trj_generator.py
+  DESTINATION lib/${PROJECT_NAME}
+)
+install(DIRECTORY
+  launch
+  DESTINATION share/${PROJECT_NAME}
+)
+
+
 install(
   DIRECTORY config
   DESTINATION share/${PROJECT_NAME}
