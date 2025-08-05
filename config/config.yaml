@@ -1,44 +1,47 @@
 # src/config/config.yaml
 # DWA Planner parameters
 
+dwa_node:
+  ros__parameters:
+    sim_period: 10.0 # hz
+    dt: 0.05
 
-sim_period: 10.0 # hz
-dt: 0.05
+    global_path_resolution: 0.1
 
-global_path_resolution: 0.1
+    # local cost map param
+    map_width: 4.0
+    map_height: 4.0
+    cell_resolution: 0.05
+    min_z_threshold: -0.2
+    max_z_threshold: 2.0
 
-# local cost map param
-map_width: 4.0
-map_height: 4.0
-cell_resolution: 0.05
-min_z_threshold: -0.2
-max_z_threshold: 2.0
+    obstacle_cost: 100.0
 
-obstacle_cost: -1.0
-robot_base_frame: "base_link"
+    robot_base_frame: "base_link"
+    robot_radius: 0.6
 
-# Maximum linear velocity (m/s)
-max_vel_x: 0.5
-# Maximum angular velocity (rad/s)
-max_vel_th: 1.0
-# global path covnert
-path_resolution: 0.1
-# Acceleration limits (m/s^2, rad/s^2)
-acc_lim_x: 1.0
-acc_lim_th: 1.0
+    # Maximum linear velocity (m/s)
+    max_vel_x: 0.5
+    # Maximum angular velocity (rad/s)
+    max_vel_th: 1.0
+    # global path covnert
+    path_resolution: 0.1
+    # Acceleration limits (m/s^2, rad/s^2)
+    acc_lim_x: 1.0
+    acc_lim_th: 1.0
 
-# Time step for simulation (s)
-dt: 0.1
+    # Time step for simulation (s)
+    dt: 0.1
 
-# Number of velocity samples
-v_samples: 10
-# Number of angular velocity samples
-omega_samples: 20
+    # Number of velocity samples
+    v_samples: 10
+    # Number of angular velocity samples
+    omega_samples: 20
 
-# Cost function weights
-# Obstacle cost weight
-weight_obstacle: 1.0
-# Goal distance cost weight
-weight_goal: 1.0
-# Forward speed cost weight
-weight_speed: 0.5
+    # Cost function weights
+    # Obstacle cost weight
+    weight_obstacle: 1.0
+    # Goal distance cost weight
+    weight_goal: 1.0
+    # Forward speed cost weight
+    weight_speed: 0.5

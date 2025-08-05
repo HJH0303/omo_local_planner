@@ -5,7 +5,7 @@ from launch import LaunchDescription
 from launch_ros.actions import Node
 def generate_launch_description():
     pkg_share = get_package_share_directory('omo_local_planner')
-    params_file = os.path.join(pkg_share, 'config', 'ekf_params.yaml')
+    params_file = os.path.join(pkg_share, 'config', 'config.yaml')
 
     return LaunchDescription([
         Node(

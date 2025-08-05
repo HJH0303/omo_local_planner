@@ -33,7 +33,6 @@ class CostMap2D:
         self.map.fill(0)
 
     def world_to_map(self, x, y):
-        """world 좌표 → map 인덱스 변환"""
         i = int((x - self.origin_x) / self.resolution)
         j = int((y - self.origin_y) / self.resolution)
         if 0 <= i < self.size_x and 0 <= j < self.size_y:
@@ -125,65 +124,67 @@ class ObstacleCost:
             cfg['max_z_threshold'],
             cfg['obstacle_cost']
         )
+        self.radius     = self.cfg['robot_radius']
+        self.dt         = self.cfg['dt']
+        self.sim_time   = self.cfg['sim_time']
+        self.init_x = 0.0
+        self.init_y = 0.0
+        self.init_theta = 0.0
 
     def update_costmap(self, cloud_msg: PointCloud2):
         self.costmap.update_from_pointcloud(cloud_msg)
 
     def get_costmap_msg(self, frame_id, stamp):
         return self.costmap.to_occupancy_grid(frame_id, stamp)
-
-    def evaluate_velocity_samples(self, samples, init_x, init_y, init_theta):
+    def evaluate_velocity_samples(self, samples):
         """
         Given a list of (v, w) velocity samples, simulate each over the
-        planner's sim_time in steps of dt, project the robot's circular
-        footprint at each step onto the costmap, and return a list of
-        average obstacle costs—one per sample.
+        planner's sim_time in steps of dt, sample multiple concentric rings
+        (outer, mid, inner) plus center, and return a list of average
+        obstacle costs—one per sample.
         """
-        dt = self.cfg.get('dt', 0.1)
-        sim_time = self.cfg.get('sim_time', 1.0)
-        radius = self.cfg['robot_radius']
-        num_steps = int(sim_time / dt)
-        angle_samples = 8  # number of points around the circumference
+        num_steps = int(self.sim_time / self.dt)
+        angle_samples = [24, 16, 8]  # points per ring
+        # three concentric rings: outer, mid, inner
+        ring_radii = [self.radius, self.radius * 0.66, self.radius * 0.33]
 
         costs = []
         for v, w in samples:
-            x, y, theta = init_x, init_y, init_theta
+            x, y, theta = self.init_x, self.init_y, self.init_theta
             path_cost = 0.0
             valid_poses = 0
 
             for _ in range(num_steps):
-                # 1) forward-integrate the pose
-                x += v * math.cos(theta) * dt
-                y += v * math.sin(theta) * dt
-                theta += w * dt
+                # 1) forward-integrate pose
+                x += v * math.cos(theta) * self.dt
+                y += v * math.sin(theta) * self.dt
+                theta += w * self.dt
 
-                # 2) sample the circular footprint
+                # 2) sample each ring + center
                 footprint_vals = []
-                for a in np.linspace(0, 2*math.pi, angle_samples, endpoint=False):
-                    fx = x + radius * math.cos(a)
-                    fy = y + radius * math.sin(a)
-                    idx = self.costmap.world_to_map(fx, fy)
-                    if idx is not None:
-                        i, j = idx
-                        footprint_vals.append(self.costmap.map[j, i])
+                for (r_idx, r) in enumerate(ring_radii):
+                    for a in np.linspace(0, 2*math.pi, angle_samples[r_idx], endpoint=False):
+                        fx = x + r * math.cos(a)
+                        fy = y + r * math.sin(a)
+                        idx = self.costmap.world_to_map(fx, fy)
+                        if idx is not None:
+                            i, j = idx
+                            footprint_vals.append(self.costmap.map[j, i])
 
-                # include center point as well
+                # center point
                 center_idx = self.costmap.world_to_map(x, y)
                 if center_idx is not None:
                     ci, cj = center_idx
                     footprint_vals.append(self.costmap.map[cj, ci])
 
                 if footprint_vals:
-                    # 3) average cost across footprint
                     path_cost += sum(footprint_vals) / len(footprint_vals)
                     valid_poses += 1
                 else:
-                    # out-of-map or no data → treat as high cost
                     path_cost += float('inf')
                     valid_poses += 1
-                    break  # no need to sample further
+                    break
 
-            # finalize cost for this sample
             if valid_poses > 0 and path_cost != float('inf'):
                 costs.append(path_cost / valid_poses)
             else:
