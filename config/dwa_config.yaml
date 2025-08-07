@@ -1,11 +1,12 @@
-# src/config/config.yaml
+# src/config/dwa_config.yaml
 # DWA Planner parameters
 
 dwa_node:
   ros__parameters:
-    sim_period: 10.0 # hz
-    dt: 0.05
-
+  
+    sim_period: 20.0 # hz
+    dt: 0.01
+    sim_time: 1.0
     global_path_resolution: 0.1
 
     # local cost map param
@@ -18,7 +19,9 @@ dwa_node:
     obstacle_cost: 100.0
 
     robot_base_frame: "base_link"
-    robot_radius: 0.6
+    robot_radius: 0.35
+    inflation_radius: 0.55
+    cost_scaling_factor: 10.0 
 
     # Maximum linear velocity (m/s)
     max_vel_x: 0.5
@@ -27,21 +30,13 @@ dwa_node:
     # global path covnert
     path_resolution: 0.1
     # Acceleration limits (m/s^2, rad/s^2)
-    acc_lim_x: 1.0
-    acc_lim_th: 1.0
-
-    # Time step for simulation (s)
-    dt: 0.1
-
+    acc_lim_v: 1.0
+    acc_lim_w: 0.5
     # Number of velocity samples
-    v_samples: 10
+    v_samples: 20
     # Number of angular velocity samples
-    omega_samples: 20
-
+    w_samples: 10
     # Cost function weights
-    # Obstacle cost weight
-    weight_obstacle: 1.0
-    # Goal distance cost weight
-    weight_goal: 1.0
-    # Forward speed cost weight
-    weight_speed: 0.5
+    wc_obstacle: 0.4
+    wc_path: 0.1
+    wc_goal: 0.3
