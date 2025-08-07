@@ -62,6 +62,10 @@ install(
   PROGRAMS scripts/dwa_trj_generator.py
   DESTINATION lib/${PROJECT_NAME}
 )
+install(
+  PROGRAMS scripts/rectangle_test_node.py
+  DESTINATION lib/${PROJECT_NAME}
+)
 install(DIRECTORY
   launch
   DESTINATION share/${PROJECT_NAME}

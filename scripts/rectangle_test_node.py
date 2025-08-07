@@ -1,104 +1,80 @@
 #!/usr/bin/env python3
-# dwa_trj_generator.py
+# rectangle_test_node.py
 
-import numpy as np
 import math
+import rclpy
+from rclpy.node import Node
+from nav_msgs.msg import Odometry
+from geometry_msgs.msg import PointStamped
 
-class TrajectoryGenerator:
-    """
-    Trajectory sampling module for DWA.
-    """
-    def __init__(self, cfg, data_provider):
-        """
-        Initialize with configuration and data provider.
-        :param cfg: dict with keys sim_period, acc_lim_v, acc_lim_w,
-                    sim_time, dt, v_samples, w_samples.
-        :param data_provider: DataProvider instance to fetch odometry and logger.
-        """
-        self.cfg = cfg
-        self.dp = data_provider
+class RectTest(Node):
+    def __init__(self):
+        super().__init__('rect_test_node')
 
-        # Dynamic window parameters
-        self.sim_period = cfg['sim_time']
-        self.acc_lim_v = float(cfg['acc_lim_v'])
-        self.acc_lim_w = float(cfg['acc_lim_w'])
-
-        # Simulation parameters
-        self.sim_time = cfg['sim_time']
-        self.dt = cfg['dt']
-        self.v_samples = int(cfg['v_samples'])
-        self.w_samples = int(cfg['w_samples'])
-        self.prev_min = 0.0
-        self.prev_max = 0.0
+        self.declare_parameter('corners', [0.0, 0.0, 3.0, 0.0, 3.0, 3.0, 0.0, 3.0])
+        self.declare_parameter('goal_tolerance', 0.3)
         
-    def sample_velocities(self):
-        """
-        Compute dynamic window of (v, w) samples based on current robot state.
-        :returns: np.ndarray of shape (N, 2) containing [v, w] pairs.
-        """
-        odom = self.dp.get_odometry()
+        points = self.get_parameter('corners').value
 
-        # Current velocities
-        v_cur = odom.twist.twist.linear.x
-        w_cur = odom.twist.twist.angular.z
+        self.corners = [(points[i], points[i+1]) for i in range(0, len(points), 2)]
+        self.tolerance = self.get_parameter('goal_tolerance').value
+        self.current_index = 0
+        self.currnet_pose = None
+        self.lap_count = 0
 
-        # Compute min/max velocities
-        v_min = v_cur
-        v_max = v_cur + self.acc_lim_v * self.sim_period
-        w_min = w_cur - self.acc_lim_w * self.sim_period
-        w_max = w_cur + self.acc_lim_w * self.sim_period
+        # Subscriber 
+        self.create_subscription(Odometry, '/odometry/filtered', self.odom_cb, 10)
 
-                    
-        if v_min < 0.0:
-            v_min = self.prev_min
-        if v_max < 0.0:
-            v_max = self.prev_max
+        #Publisher
+        self.goal_pub = self.create_publisher(PointStamped, '/target_point', 10)
 
-        if v_max > 0.3: v_max = 0.3
-        if v_min > 0.0: v_min = 0.0
+        #Timer
+        self.create_timer(0.1, self.timer_cb)
 
-        self.prev_min= v_min 
-        self.prev_max= v_max 
+        #Publish first waypoint
+        self.publish_goal()
 
-        # self.dp._node.get_logger().info(
-        #         f'linear_min={v_min}, linear_max={v_max}'
-        #     )
-        # Discretize into samples
+    def odom_cb(self, msg: Odometry):
+        self.currnet_pose = msg.pose.pose.position
 
-        vs = np.linspace(v_min, v_max, self.v_samples)
-        ws = np.linspace(w_min, w_max, self.w_samples)
-        V, W = np.meshgrid(vs, ws, indexing='ij')
-        return np.stack((V.ravel(), W.ravel()), axis=1)
+    def publish_goal(self):
+        x, y = self.corners[self.current_index]
+        goal = PointStamped
+        goal.header.frame_id = 'map'
+        goal.header.stamp = self.get_clock().now().to_msg()
+        goal.point.x = x
+        goal.point.y = y
+        goal.point.z = 0.0
+        self.goal_pub.publish(goal)
 
-    def generate_trajectories(self):
-        """
-        Generate candidate trajectories based on current odometry.
-        :param vel_pairs: optional np.ndarray of [v, w] samples; if None, uses sample_velocities().
-        :returns: list of trajectories, each a list of (x, y, theta) tuples.
-        """
-        odom = self.dp.get_odometry()
+    def timer_cb(self):
+        gx, gy = self.corners[self.current_index]     
+        dx = gx - self.current_pose.x
+        dy = gy - self.current_pose.y
+        dist = math.hypot(dx, dy)
 
-        # Extract position and compute yaw from quaternion directly
-        p = odom.pose.pose.position
-        q = odom.pose.pose.orientation
-        siny = 2.0 * (q.w * q.z + q.x * q.y)
-        cosy = 1.0 - 2.0 * (q.y * q.y + q.z * q.z)
-        yaw = math.atan2(siny, cosy)
-        init_pose = (p.x, p.y, yaw)
+        if dist <= self.tolerance:
+            self.currnet_index = (self.current_index +1) % len(self.corners)
+            self.publish_goal()
+        # if dist <= self.tolerance:
+        #     next_index = (self.current_index +1) % len(self.corners)
+        #     if next_index == 0:
+        #         next_index +=1
+        #         if next_index >=1:
+        #             self.timer.cancle()
+        #             return
+        #     self.current_index = next_index
+        #     self.publish_goal()
 
-        # Determine velocity samples
-        vel_pairs = self.sample_velocities()
-        # Simulate each (v, w) pair
-        num_steps = int(self.sim_time / self.dt)
-        trajectories = []
-        for v, w in vel_pairs:
-            x = y = th = 0.0
-            traj = []
-            for _ in range(num_steps):
-                traj.append((x, y, th))
-                x += v * math.cos(th) * self.dt
-                y += v * math.sin(th) * self.dt
-                th += w * self.dt
-            trajectories.append(traj)
 
-        return vel_pairs, trajectories
+
+def main(args=None):
+    rclpy.init(args=args)
+    node = RectTest()
+    rclpy.spin(node)
+    node.destroy_node()
+    rclpy.shutdown()
+
+
+if __name__ == "__main__":
+    main()
