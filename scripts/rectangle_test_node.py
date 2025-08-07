@@ -58,9 +58,9 @@ class RectTest(Node):
             self.publish_goal()
         # if dist <= self.tolerance:
         #     next_index = (self.current_index +1) % len(self.corners)
-        #     if next_index == 0:
-        #         next_index +=1
-        #         if next_index >=1:
+        #     if lap_count == 0:
+        #         lap_count +=1
+        #         if lap_count >=1:
         #             self.timer.cancle()
         #             return
         #     self.current_index = next_index
