@@ -9,11 +9,6 @@ from nav_msgs.msg import Path, OccupancyGrid
 from geometry_msgs.msg import Pose, Point, Quaternion
 
 class CostMap2D:
-    """
-    2D grid-based local costmap builder:
-      - z > z_threshold 인 점군을 obstacle로 표시
-      - obstacle_cost 값을 셀에 기록
-    """
     def __init__(self, dt, width_m, height_m, resolution,
                  min_z_threshold, max_z_threshold,
                  obstacle_cost, inflation_radius,

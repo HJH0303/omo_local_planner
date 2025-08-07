@@ -54,8 +54,8 @@ class TrajectoryGenerator:
         if v_max < 0.0:
             v_max = self.prev_max
 
-        if v_max > 1.5: v_max = 1.5
-        if v_min > 0.1: v_min = 0.1
+        if v_max > 0.3: v_max = 0.3
+        if v_min > 0.0: v_min = 0.0
 
         self.prev_min= v_min 
         self.prev_max= v_max 
@@ -70,7 +70,7 @@ class TrajectoryGenerator:
         V, W = np.meshgrid(vs, ws, indexing='ij')
         return np.stack((V.ravel(), W.ravel()), axis=1)
 
-    def generate_trajectories(self, vel_pairs=None):
+    def generate_trajectories(self):
         """
         Generate candidate trajectories based on current odometry.
         :param vel_pairs: optional np.ndarray of [v, w] samples; if None, uses sample_velocities().
@@ -87,8 +87,7 @@ class TrajectoryGenerator:
         init_pose = (p.x, p.y, yaw)
 
         # Determine velocity samples
-        if vel_pairs is None:
-            vel_pairs = self.sample_velocities()
+        vel_pairs = self.sample_velocities()
         # Simulate each (v, w) pair
         num_steps = int(self.sim_time / self.dt)
         trajectories = []

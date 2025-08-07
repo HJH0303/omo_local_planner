@@ -42,9 +42,9 @@ class DWANode(Node):
         self.declare_parameter('acc_lim_w', '0.25')
         self.declare_parameter('v_samples', '20')
         self.declare_parameter('w_samples', '10')
-        self.declare_parameter('wc_obstacle', '0.1')
-        self.declare_parameter('wc_path', '0.0')
-        self.declare_parameter('wc_goal', '1.0')
+        self.declare_parameter('wc_obstacle', '0.3')
+        self.declare_parameter('wc_path', '0.1')
+        self.declare_parameter('wc_goal', '0.5')
 
 
         # Collect parameters
@@ -78,10 +78,13 @@ class DWANode(Node):
         self.current_pc = None
         self.current_odom = None
         self.current_path = None
+        self.waypoint = None
+
         self.sim_time = self.cfg['sim_time']
         self.dt = self.cfg['dt']
-        self.sim_period = float(self.cfg['sim_period'])
         self.prev_pair = (0.0, 0.0)
+        self.sim_period = float(self.cfg['sim_period'])
+        
         # Subscriptions
         self.create_subscription(
             PointCloud2,
@@ -102,6 +105,7 @@ class DWANode(Node):
             lambda msg: setattr(self, 'waypoint', msg),
             10
         )
+        
         # Publishers
         self.path_pub    = self.create_publisher(Path, '/global_path', 10)
         self.costmap_pub = self.create_publisher(OccupancyGrid, '/local_costmap', 10)
@@ -116,16 +120,11 @@ class DWANode(Node):
         self.traj_gen  = TrajectoryGenerator(self.cfg, dp)
         self.distance_costs = DistanceCosts(dp)
         self.evaluator = CostEvaluator(self.cfg, dp)
-        self.waypoint = None
         # Control loop timer only
         self.create_timer(1/self.sim_period, self._control_loop)
         self.get_logger().info('DWANode initialized with integrated costmap update.')
 
     def publish_trajectory_markers(self, samples, color=(1.,0.,0.),all_pub=False):
-        """
-        base_link 기준으로 각 (v,w) 샘플의 궤적을 LINE_STRIP Marker로 퍼블리시
-        """
-        
         for idx, (v, w) in enumerate(samples):
             marker = Marker()
             marker.header.frame_id = self.cfg['robot_base_frame']
@@ -157,7 +156,7 @@ class DWANode(Node):
 
     def _control_loop(self):
         # Ensure all inputs available
-        if not (self.current_pc and self.current_odom and self.waypoint):            
+        if not (self.current_pc and self.current_odom):            
             return
         # 1) Generate trajectories
         vel_pairs, trj_samples = self.traj_gen.generate_trajectories()
@@ -179,52 +178,16 @@ class DWANode(Node):
         path_costs, goal_costs = self.distance_costs.evaluate(trj_samples)
         obs_costs = self.obs_cost.evaluate_velocity_samples(vel_pairs)
         best_pair, best_cost = self.evaluator.evaluate(vel_pairs, obs_costs, path_costs, goal_costs)
-        # print("obs_costs:      ", obs_costs)
-        # print("path_costs:     ", path_costs)
-        # print("goal_costs:     ", goal_costs)
-
-        # print("best_cost", best_cost)
-
-        # print(best_pair)
-        # self.get_logger().info(
-        #         f'cmd_vel → linear={best_v}, angular={best_w}, cost={best_cost}'
-        #     )
-
-        # # 3) (v, w, cost) 튜플 리스트로 변환
-        # obs_costs = []
-        # for (v, w), c in zip(trj_samples, costs):
-        #     obs_costs.append(c)
-
-        # # obs cost should be bigger than -10
-        # valid_scores = [(v, w, c) for v, w, c in scores if c > -10]
-
-        # # 5) 최소값 선택 또는 기본값
-        # if valid_scores:
-        #     best_v, best_w, best_cost = min(valid_scores, key=lambda x: x[2])
-        # else:
-        #     self.get_logger().info(
-        #         'all of the paths are -10, so publish stop order.'
-        #     )
-        #     best_v, best_w, best_cost = 0.0, 0.0, float('inf')
-
-
-            
-        # self.get_logger().info(
-        #         f'cmd_vel → linear={best_v}, angular={best_w}, cost={best_cost}'
-        #     )
 
         if best_pair is None: 
             best_pair = self.prev_pair
         self.publish_trajectory_markers([(best_pair[0],best_pair[1])])
         self.publish_trajectory_markers(vel_pairs,color=(0.,1.,0.),all_pub=True)
-
         self.prev_pair = best_pair
-
-        # for traj in trajectories:
-        #     costmap_cost = self.obs_cost.compute(traj)
-        #     score = self.evaluator.evaluate(traj, costmap_cost)
-        #     scores.append(score)
-
+        twist = Twist()
+        twist.linear.x = best_pair[0]
+        twist.angular.z = best_pair[1]
+        self.cmd_pub.publish(twist)
         # # 4) Select best and publish cmd_vel
         # best = trajectories[scores.index(min(scores))]
         # cmd = self.executor.to_cmd(best)
