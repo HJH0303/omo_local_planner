@@ -11,6 +11,9 @@ class DataProvider():
     def get_pointcloud(self):
         return self._node.current_pc
 
+    def get_laserscan(self):
+        return self._node.laserscan
+
     def get_odometry(self):
         return self._node.current_odom
 

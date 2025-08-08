@@ -40,3 +40,4 @@ dwa_node:
     wc_obstacle: 0.4
     wc_path: 0.1
     wc_goal: 0.3
+    wc_goal_center: 0.3

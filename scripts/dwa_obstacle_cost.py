@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
-# dwa_obstacle_cost.py
 
 import math
 import numpy as np
-from sensor_msgs.msg import PointCloud2
+from sensor_msgs.msg import PointCloud2, LaserScan
 import sensor_msgs_py.point_cloud2 as pc2
-from nav_msgs.msg import Path, OccupancyGrid
-from geometry_msgs.msg import Pose, Point, Quaternion
+from nav_msgs.msg import OccupancyGrid
+from geometry_msgs.msg import Pose
 
 class CostMap2D:
     def __init__(self, dt, width_m, height_m, resolution,
@@ -15,12 +14,12 @@ class CostMap2D:
                  cost_scaling_factor, inscribed_radius):
         self.resolution = float(resolution)
         self.dt = dt
-        self.size_x = int(np.ceil(width_m / resolution))
-        self.size_y = int(np.ceil(height_m / resolution))
+        self.size_x = int(math.ceil(width_m / resolution))
+        self.size_y = int(math.ceil(height_m / resolution))
         self.origin_x = 0.0
         self.origin_y = -height_m / 2.0
-        self.min_z_thresh=min_z_threshold
-        self.max_z_thresh=max_z_threshold
+        self.min_z_thresh = min_z_threshold
+        self.max_z_thresh = max_z_threshold
 
         self.obstacle_cost = int(obstacle_cost)
         self.inflation_radius = float(inflation_radius)
@@ -42,7 +41,6 @@ class CostMap2D:
             return i, j
         return None
 
-
     def _compute_caches(self):
         r = self.cell_inflation_radius
         size = 2 * r + 1
@@ -60,8 +58,6 @@ class CostMap2D:
                             -self.cost_scaling_factor * (dist - self.inscribed_radius)
                         )
                     self.cost_matrix[dy + r][dx + r] = int(min(max(cost, 0), self.obstacle_cost))
-                else:
-                    self.cost_matrix[dy + r][dx + r] = 0
 
     def inflate_obstacles(self):
         radius_cells = int(self.inflation_radius / self.resolution)
@@ -81,36 +77,6 @@ class CostMap2D:
                             new_map[nj, ni] = max(new_map[nj, ni], cost)
         self.map = new_map
 
-    def update_from_pointcloud(self, cloud: PointCloud2):
-        pts_list = []
-        for px, py, pz in pc2.read_points(
-                cloud, field_names=('x','y','z'), skip_nans=True):
-            if not (math.isfinite(px) and math.isfinite(py) and math.isfinite(pz)):
-                continue
-            if pz <= self.min_z_thresh or pz >= self.max_z_thresh:
-                continue
-            pts_list.append((px, py, pz))
-
-        if not pts_list:
-            self.clear()
-            return
-
-        pts = np.array(pts_list, dtype=np.float32)
-        inv_res = 1.0 / self.resolution
-        xis = np.floor((pts[:,0] - self.origin_x) * inv_res).astype(np.int32)
-        yis = np.floor((pts[:,1] - self.origin_y) * inv_res).astype(np.int32)
-
-        valid = (
-            (xis >= 0) & (xis < self.size_x) &
-            (yis >= 0) & (yis < self.size_y)
-        )
-        xis, yis = xis[valid], yis[valid]
-
-        self.clear()
-        self.map[yis, xis] = self.obstacle_cost
-        # inflate after marking obstacles
-        self.inflate_obstacles()
-
     def to_occupancy_grid(self, frame_id, stamp):
         grid = OccupancyGrid()
         grid.header.stamp = stamp
@@ -127,14 +93,13 @@ class CostMap2D:
         origin.orientation.w = 1.0
         info.origin = origin
 
-        flat = self.map.flatten(order='C')
-        grid.data = [int(v) for v in flat]
+        grid.data = [int(v) for v in self.map.flatten(order='C')]
         return grid
-
 
 class ObstacleCost:
     """
-    Obstacle cost computation & local costmap builder for DWA with Nav2-style inflation.
+    Obstacle cost computation & local costmap builder for DWA with Nav2-style inflation,
+    integrating both ZED point cloud and 2D LiDAR.
     """
     def __init__(self, cfg, data_provider):
         self.cfg = cfg
@@ -148,15 +113,61 @@ class ObstacleCost:
         )
         self.dt = float(cfg['dt'])
         self.sim_time = float(cfg['sim_time'])
-        self.init_x = 0.0
-        self.init_y = 0.0
-        self.init_theta = 0.0
-
-    def update_costmap(self, cloud_msg: PointCloud2):
-        self.costmap.update_from_pointcloud(cloud_msg)
-
+        self.offset_x = -0.20
+        self.offset_y = -0.04
+        
+    def update_costmap(self):
+        cloud_msg = self.dp.get_pointcloud()
+        scan_msg = self.dp.get_laserscan()
+        
+        # 1) 맵 초기화
+        self.costmap.clear()
+        # 2) ZED point cloud 처리
+        if cloud_msg:
+            self._mark_pointcloud(cloud_msg)
+        # 3) 2D LiDAR 처리
+        if scan_msg:
+            self._mark_laserscan(scan_msg)
+        # 4) Nav2 스타일 팽창
+        self.costmap.inflate_obstacles()
+    
     def get_costmap_msg(self, frame_id, stamp):
         return self.costmap.to_occupancy_grid(frame_id, stamp)
+
+    def _mark_pointcloud(self, cloud_msg):
+        pts = []
+        for x, y, z in pc2.read_points(cloud_msg, field_names=('x','y','z'), skip_nans=True):
+            if not (math.isfinite(x) and math.isfinite(y) and math.isfinite(z)):
+                continue
+            if self.costmap.min_z_thresh < z < self.costmap.max_z_thresh:
+                pts.append((x, y, z))
+        if pts:
+            self._apply_points(pts)
+
+    def _mark_laserscan(self, scan_msg):
+        pts = []
+        angle = scan_msg.angle_min
+        for r in scan_msg.ranges:
+            if scan_msg.range_min < r < scan_msg.range_max:
+                x = r * math.cos(angle) + self.offset_x
+                y = r * math.sin(angle) + self.offset_y
+                pts.append((x, y, 0.0))
+            angle += scan_msg.angle_increment
+        if pts:
+            self._apply_points(pts)
+
+    def _apply_points(self, pts_list):
+        arr = np.array(pts_list, dtype=np.float32)
+        inv_res = 1.0 / self.costmap.resolution
+        xis = np.floor((arr[:,0] - self.costmap.origin_x) * inv_res).astype(int)
+        yis = np.floor((arr[:,1] - self.costmap.origin_y) * inv_res).astype(int)
+
+        valid = (
+            (xis >= 0) & (xis < self.costmap.size_x) &
+            (yis >= 0) & (yis < self.costmap.size_y)
+        )
+        xis, yis = xis[valid], yis[valid]
+        self.costmap.map[yis, xis] = self.costmap.obstacle_cost
 
     def evaluate_velocity_samples(self, samples):
         num_steps = int(self.sim_time / self.dt)
@@ -165,7 +176,7 @@ class ObstacleCost:
 
         costs = []
         for v, w in samples:
-            x, y, theta = self.init_x, self.init_y, self.init_theta
+            x, y, theta = 0.0, 0.0, 0.0
             path_cost = 0.0
             valid_poses = 0
             early_exit = False

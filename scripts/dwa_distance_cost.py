@@ -26,15 +26,13 @@ class DistanceCosts:
         """
         # 1) Current position (start)
         odom = self.dp.get_odometry()
-        # waypoint = self.dp.get_waypoint()
+        waypoint = self.dp.get_waypoint()
         start = odom.pose.pose.position
         x0, y0 = start.x, start.y
 
         # # 2) Waypoint coordinates
-        # x_goal = waypoint.point.x
-        # y_goal = waypoint.point.y
-        x_goal = 6.0
-        y_goal = 0.0
+        x_goal = waypoint.point.x
+        y_goal = waypoint.point.y
         # 3) Line parameters
         dx = x_goal - x0
         dy = y_goal - y0
@@ -57,20 +55,44 @@ class DistanceCosts:
         :param waypoint_msg: geometry_msgs/PointStamped of the local goal
         :return: Euclidean distance from last trajectory point to local goal
         """
-        # waypoint = self.dp.get_waypoint()
-        x_goal = 6.0
-        y_goal = 0.0
+        waypoint = self.dp.get_waypoint()
         # Last trajectory point
         x_end, y_end, _ = trajectory[-1]
 
         # Waypoint coordinates
-        # x_goal = waypoint.point.x
-        # y_goal = waypoint.point.y
-        x_goal = 6.0
-        y_goal = 0.0
+        x_goal = waypoint.point.x
+        y_goal = waypoint.point.y
         # Euclidean distance
-        return math.hypot(x_goal - x_end*0.01, y_goal - y_end*0.01)
-    
+        return math.hypot(x_goal - x_end, y_goal - y_end)
+        
+    def goal_center_cost(self, trajectory, xshift: float = -0.3, yshift: float = 0.0) -> float:
+        """
+        Distance from shifted end-of-trajectory point to local goal.
+
+        We shift the last trajectory point by `xshift` meters along its heading (theta)
+        and by `yshift` meters sideways (left = positive), then compute Euclidean distance
+        to the current waypoint.
+        """
+        if not trajectory:
+            return float("inf")
+
+        waypoint = self.dp.get_waypoint()
+        if waypoint is None:
+            return float("inf")
+
+        # Goal (local waypoint)
+        x_goal = waypoint.point.x
+        y_goal = waypoint.point.y
+
+        # Last trajectory pose
+        x_end, y_end, theta_end = trajectory[-1]
+
+        # Apply forward/backward and lateral shifts in the local heading frame
+        px = x_end + xshift * math.cos(theta_end) + yshift * math.cos(theta_end + math.pi / 2.0)
+        py = y_end + xshift * math.sin(theta_end) + yshift * math.sin(theta_end + math.pi / 2.0)
+
+        # Cost = distance from shifted point to goal
+        return math.hypot(x_goal - px, y_goal - py)
 
     def evaluate(self, trajectories):
         """
@@ -81,4 +103,5 @@ class DistanceCosts:
         """
         path_costs = [self.path_cost(traj) for traj in trajectories]
         goal_costs = [self.goal_cost(traj) for traj in trajectories]
-        return path_costs, goal_costs
+        goal_center_costs = [self.goal_center_cost(traj) for traj in trajectories]
+        return path_costs, goal_costs, goal_center_costs

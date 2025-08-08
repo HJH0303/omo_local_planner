@@ -35,6 +35,10 @@ install(
   DESTINATION lib/${PROJECT_NAME}
 )
 install(
+  PROGRAMS scripts/rectangle_test_node.py
+  DESTINATION lib/${PROJECT_NAME}
+)
+install(
   PROGRAMS scripts/dwa_cost_evaluator.py
   DESTINATION lib/${PROJECT_NAME}
 )
