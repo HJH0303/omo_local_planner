@@ -10,6 +10,8 @@ find_package(rclcpp REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
+find_package(visualization_msgs REQUIRED)
+
 find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(message_filters REQUIRED)
@@ -27,6 +29,49 @@ install(
   PROGRAMS scripts/robot_test.py
   DESTINATION lib/${PROJECT_NAME}
 )
+# DWA modules
+install(
+  PROGRAMS scripts/dwa_convert_global_path.py
+  DESTINATION lib/${PROJECT_NAME}
+)
+install(
+  PROGRAMS scripts/rectangle_test_node.py
+  DESTINATION lib/${PROJECT_NAME}
+)
+install(
+  PROGRAMS scripts/dwa_cost_evaluator.py
+  DESTINATION lib/${PROJECT_NAME}
+)
+install(
+  PROGRAMS scripts/dwa_distance_cost.py
+  DESTINATION lib/${PROJECT_NAME}
+)
+install(
+  PROGRAMS scripts/dwa_data_provider.py
+  DESTINATION lib/${PROJECT_NAME}
+)
+install(
+  PROGRAMS scripts/dwa_executor.py
+  DESTINATION lib/${PROJECT_NAME}
+)
+install(
+  PROGRAMS scripts/dwa_node.py
+  DESTINATION lib/${PROJECT_NAME}
+)
+install(
+  PROGRAMS scripts/dwa_obstacle_cost.py
+  DESTINATION lib/${PROJECT_NAME}
+)
+install(
+  PROGRAMS scripts/dwa_trj_generator.py
+  DESTINATION lib/${PROJECT_NAME}
+)
+install(DIRECTORY
+  launch
+  DESTINATION share/${PROJECT_NAME}
+)
+
+
 install(
   DIRECTORY config
   DESTINATION share/${PROJECT_NAME}
