@@ -37,6 +37,8 @@ dwa_node:
     # Number of angular velocity samples
     w_samples: 10
     # Cost function weights
-    wc_obstacle: 0.4
-    wc_path: 0.1
-    wc_goal: 0.3
+    wc_obstacle: 0.2
+    wc_path: 0.2
+    wc_align: 0.2
+    wc_goal: 0.2
+    wc_goal_center: 0.2

@@ -53,6 +53,37 @@ class DistanceCosts:
             acc += abs(A * x + B * y + C)
 
         return acc / len(trajectory)
+    
+
+    def alignment_cost(self, trajectory, xshift: float = -0.3, yshift: float = 0.0):
+        if not trajectory:
+            return float('int')
+        
+        path = self.dp.get_gpath_params()
+        if path is None:
+            return float('inf')
+        
+        A = float(path.vector.x)
+        B = float(path.vector.y)
+        C = float(path.vector.z)
+
+        norm = math.hypot(A, B)
+        if norm < 1e-9:
+            # Degenerate line (goal == start or invalid) -> no lateral error
+            return 0.0
+        if abs(norm - 1.0) > 1e-6:
+            A /= norm
+            B /= norm
+            C /= norm
+
+        acc = 0.0
+        for x, y, theta in trajectory:
+            px = x + xshift * math.cos(theta) + yshift * math.cos(theta + math.pi / 2.0)
+            py = y + xshift * math.sin(theta) + yshift * math.sin(theta + math.pi / 2.0)
+            acc += abs(A * px + B * py + C)
+
+        return acc / len(trajectory)
+
 
     def goal_cost(self, trajectory):
         """
@@ -68,6 +99,7 @@ class DistanceCosts:
         # Waypoint coordinates
         x_goal = waypoint.point.x
         y_goal = waypoint.point.y
+        
         # Euclidean distance
         return math.hypot(x_goal - x_end, y_goal - y_end)
         
@@ -108,6 +140,7 @@ class DistanceCosts:
         :return: two lists: path_costs, goal_costs
         """
         path_costs          = [self.path_cost(traj) for traj in trajectories]
+        alignment_costs     = [self.alignment_cost(traj) for traj in trajectories]
         goal_costs          = [self.goal_cost(traj) for traj in trajectories]
         goal_center_costs   = [self.goal_center_cost(traj) for traj in trajectories]
-        return path_costs, goal_costs, goal_center_costs
+        return path_costs, alignment_costs, goal_costs, goal_center_costs

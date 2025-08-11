@@ -48,8 +48,9 @@ class DWANode(Node):
         self.declare_parameter('w_samples', '19')
         self.declare_parameter('wc_obstacle', '0.2')
         self.declare_parameter('wc_path', '0.2')
-        self.declare_parameter('wc_goal', '0.3')
-        self.declare_parameter('wc_goal_center', '0.5')
+        self.declare_parameter('wc_align, 0.2')
+        self.declare_parameter('wc_goal', '0.2')
+        self.declare_parameter('wc_goal_center', '0.2')
 
 
 
@@ -75,6 +76,7 @@ class DWANode(Node):
             'w_samples':                self.get_parameter('w_samples').value,
             'wc_obstacle':              self.get_parameter('wc_obstacle').value,
             'wc_path':                  self.get_parameter('wc_path').value,
+            'wc_align':                 self.get_parameter('wc_align').value,
             'wc_goal':                  self.get_parameter('wc_goal').value,
             'wc_goal_center':           self.get_parameter('wc_goal_center').value,
 
@@ -214,9 +216,9 @@ class DWANode(Node):
         # self.publish_trajectory_markers(trj_samples)
 
         # 2) 한 번만 전체 평가 => [cost_of_sample0, cost_of_sample1]
-        path_costs, goal_costs, goal_front_costs = self.distance_costs.evaluate(trj_samples)
+        path_costs, alignment_costs, goal_costs, goal_front_costs = self.distance_costs.evaluate(trj_samples)
         obs_costs = self.obs_cost.evaluate_velocity_samples(vel_pairs)
-        best_pair, best_cost = self.evaluator.evaluate(vel_pairs, obs_costs, path_costs, goal_costs,goal_front_costs)
+        best_pair, best_cost = self.evaluator.evaluate(vel_pairs, obs_costs, path_costs, alignment_costs, goal_costs, goal_front_costs)
 
         if best_pair is None: 
             best_pair = self.prev_pair
