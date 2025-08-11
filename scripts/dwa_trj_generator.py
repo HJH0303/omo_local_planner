@@ -19,7 +19,7 @@ class TrajectoryGenerator:
         self.dp = data_provider
 
         # Dynamic window parameters
-        self.sim_period = cfg['sim_time']
+        self.sim_period = cfg['sim_period']
         self.acc_lim_v = float(cfg['acc_lim_v'])
         self.acc_lim_w = float(cfg['acc_lim_w'])
 
@@ -45,24 +45,22 @@ class TrajectoryGenerator:
         # Compute min/max velocities
         v_min = v_cur
         v_max = v_cur + self.acc_lim_v * self.sim_period
-        w_min = w_cur - self.acc_lim_w * self.sim_period
-        w_max = w_cur + self.acc_lim_w * self.sim_period
+        w_min = - self.acc_lim_w * self.sim_period
+        w_max = self.acc_lim_w * self.sim_period
 
-                    
         if v_min < 0.0:
             v_min = self.prev_min
         if v_max < 0.0:
             v_max = self.prev_max
 
         if v_max > 0.3: v_max = 0.3
-        if v_min > 0.0: v_min = 0.0
+        if v_min < 0.0: v_min = 0.0
 
         self.prev_min= v_min 
         self.prev_max= v_max 
 
-        # self.dp._node.get_logger().info(
-        #         f'linear_min={v_min}, linear_max={v_max}'
-        #     )
+        # self.dp._node.get_logger().info(f'linear_min={v_min}, linear_max={v_max}')
+
         # Discretize into samples
 
         vs = np.linspace(v_min, v_max, self.v_samples)
@@ -84,7 +82,6 @@ class TrajectoryGenerator:
         siny = 2.0 * (q.w * q.z + q.x * q.y)
         cosy = 1.0 - 2.0 * (q.y * q.y + q.z * q.z)
         yaw = math.atan2(siny, cosy)
-        init_pose = (p.x, p.y, yaw)
 
         # Determine velocity samples
         vel_pairs = self.sample_velocities()

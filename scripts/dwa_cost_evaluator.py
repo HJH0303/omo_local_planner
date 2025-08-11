@@ -28,17 +28,17 @@ class CostEvaluator:
                 obs_norm.append(c)
 
         # Path cost: min-max normalization to [0,1]
-        min_path = min(path_cost) if path_cost else 0.0
-        max_path = max(path_cost) if path_cost else 1.0
-        range_path = max_path - min_path 
+        min_path    = min(path_cost) if path_cost else 0.0
+        max_path    = max(path_cost) if path_cost else 1.0
+        range_path  = max_path - min_path 
         if range_path == 0.0: range_path = 1.0 
 
         path_norm = [(c - min_path) / range_path for c in path_cost]
 
         # Goal cost: min-max normalization to [0,1]
-        min_goal = min(goal_cost) if goal_cost else 0.0
-        max_goal = max(goal_cost) if goal_cost else 1.0
-        range_goal = max_goal - min_goal
+        min_goal    = min(goal_cost) if goal_cost else 0.0
+        max_goal    = max(goal_cost) if goal_cost else 1.0
+        range_goal  = max_goal - min_goal
         if range_goal == 0.0: range_goal = 1.0 
 
         goal_norm = [(c - min_goal) / range_goal for c in goal_cost]
