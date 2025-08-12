@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
+# dwa_carrot_node.py
 
 import math
 import rclpy
 from rclpy.node import Node
-from nav_msgs.msg import Odometry
-from geometry_msgs.msg import PointStamped
+from nav_msgs.msg import Odometry, Path
+from geometry_msgs.msg import PointStamped, PoseStamped, Vector3Stamped
 from types import SimpleNamespace
+
+
 
 def yaw_from_quat(q) -> float:
     # REP-103 yaw
@@ -18,10 +21,10 @@ class CarrotNode(Node):
         super().__init__('carrot_node')
 
         # ---- Parameters ----
-        self.declare_parameter('corners', [6.0, 0.0])
+        self.declare_parameter('corners', [10.0, 0.0])
         self.declare_parameter('goal_tolerance', 0.2)    # [m]
-        self.declare_parameter('lookahead_max', 4.0)      # [m]
-        self.declare_parameter('lookahead_min', 0.1)      # [m] set 0.0 to disable
+        self.declare_parameter('lookahead_max', 5.0)      # [m]
+        self.declare_parameter('lookahead_min', 0.05)      # [m] set 0.0 to disable
         self.declare_parameter('timer_period', 0.05)       # [s]
         self.declare_parameter('advance_when_reached', True)
         self.declare_parameter('loop_corners', False)
@@ -45,6 +48,9 @@ class CarrotNode(Node):
         # ---- ROS I/O ----
         self.create_subscription(Odometry, '/odometry/filtered', self.odom_cb, 10)
         self.tp_pub = self.create_publisher(PointStamped, '/target_point', 10)
+        
+        self.gpath_seg_pub = self.create_publisher(Path, '/global_path_segment', 10)
+        self.gpath_param_pub = self.create_publisher(Vector3Stamped, '/global_path_params', 10)
 
         # ---- Timer ----
         self.timer = self.create_timer(period, self.timer_cb)
@@ -53,6 +59,47 @@ class CarrotNode(Node):
             f"CarrotNode: tol={self.tol:.2f}m, Lmax={self.Lmax:.2f}m, Lmin={self.Lmin:.2f}m, goals={len(self.goals)}, "
             f"advance={self.advance}, loop={self.loop}"
         )
+
+        # ------global_path_convert--------
+    def publish_path_seg(self, x0, y0, xg, yg):
+        path = Path()
+        path.header.stamp = self.get_clock().now().to_msg()
+        path.header.frame_id = 'odom'
+
+        def mk_pose(x, y):
+            ps = PoseStamped()
+            ps.header = path.header
+            ps.pose.position.x = float(x)
+            ps.pose.position.y = float(y)
+            ps.pose.position.z = 0.0
+            ps.pose.orientation.w = 1.0
+            return ps
+        
+        path.poses = [mk_pose(x0, y0), mk_pose(xg, yg)]
+        self.gpath_seg_pub.publish(path)
+
+    def publish_path_params(self, x0, y0, xg, yg):
+        dx = xg -x0
+        dy = yg -y0
+        L = math.hypot(dx, dy)
+        msg = Vector3Stamped()
+        msg.header.stamp = self.get_clock().now().to_msg()
+        msg.header.frame_id = 'odom'
+        if L < 1e-9:
+            msg.vector.x = 0.0
+            msg.vector.y = 0.0
+            msg.vector.z = 0.0
+        else:
+            A = dy/L
+            B = -dx/L
+            C = (dx * y0 - dy * x0)/L
+
+            msg.vector.x = A
+            msg.vector.y = B
+            msg.vector.z = C
+        self.gpath_param_pub.publish(msg)
+
+    
 
     # ---------------- Callbacks ----------------
     def odom_cb(self, msg: Odometry):
@@ -88,12 +135,6 @@ class CarrotNode(Node):
                 self.publish_target(0.0, 0.0)
                 return
 
-            # update current goal after advancing
-            gx, gy = self.goals[self.idx]
-            dx_w = gx - self.state.x
-            dy_w = gy - self.state.y
-            dist = math.hypot(dx_w, dy_w)
-
         # 3) Rotate into base_link (ex, ey) = R(-yaw) * [dx_w, dy_w]
         cy, sy = math.cos(self.state.yaw), math.sin(self.state.yaw)
         ex =  cy * dx_w + sy * dy_w
@@ -117,8 +158,10 @@ class CarrotNode(Node):
 
         # 5) Publish single carrot target for DWA
         self.publish_target(tx, ty)
+        self.publish_path_seg(self.state.x, self.state.y, gx, gy)
+        self.publish_path_params(self.state.x, self.state.y, tx, ty)
 
-    # ---------------- Utils ----------------
+        # ---------------- Utils ----------------
     def publish_target(self, x: float, y: float):
         msg = PointStamped()
         msg.header.frame_id = 'base_link'  # IMPORTANT: relative to robot
@@ -127,6 +170,8 @@ class CarrotNode(Node):
         msg.point.y = float(y)
         msg.point.z = 0.0
         self.tp_pub.publish(msg)
+
+
 
 def main(args=None):
     rclpy.init(args=args)

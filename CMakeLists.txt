@@ -29,6 +29,10 @@ install(
   PROGRAMS scripts/robot_test.py
   DESTINATION lib/${PROJECT_NAME}
 )
+install(
+  PROGRAMS scripts/dwa_carrot_node.py
+  DESTINATION lib/${PROJECT_NAME}
+)
 # DWA modules
 install(
   PROGRAMS scripts/dwa_convert_global_path.py

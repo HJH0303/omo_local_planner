@@ -19,34 +19,71 @@ class DistanceCosts:
 
     def path_cost(self, trajectory):
         """
-        Calculate path cost for a single trajectory using perpendicular distance.
-        :param trajectory: list of (x, y, theta) tuples
-        :param waypoint_msg: geometry_msgs/PointStamped of the local goal
-        :return: sum of perpendicular distances to the line from current position to local goal
+        Perpendicular-distance path cost using precomputed line params from CarrotNode.
+
+        Uses normalized line coefficients (A, B, C) for the line Ax + By + C = 0,
+        where (A^2 + B^2) == 1. If not normalized, this function will normalize them.
+
+        :param trajectory: list of (x, y, theta) tuples in the SAME FRAME as the line params (e.g., 'odom')
+        :return: average perpendicular distance from trajectory points to the line
         """
-        # 1) Current position (start)
-        odom = self.dp.get_odometry()
-        waypoint = self.dp.get_waypoint()
-        start = odom.pose.pose.position
-        x0, y0 = start.x, start.y
+        if not trajectory:
+            return float('inf')
 
-        # # 2) Waypoint coordinates
-        x_goal = waypoint.point.x
-        y_goal = waypoint.point.y
-        # 3) Line parameters
-        dx = x_goal - x0
-        dy = y_goal - y0
-        L = math.hypot(dx, dy)
-        if L == 0.0:
+        path = self.dp.get_gpath_params()  # geometry_msgs/Vector3Stamped or None
+        if path is None:
+            return float('inf')
+
+        A = float(path.vector.x)
+        B = float(path.vector.y)
+        C = float(path.vector.z)
+
+        # Ensure (A, B, C) are normalized so distance = |A*x + B*y + C|
+        norm = math.hypot(A, B)
+        if norm < 1e-9:
+            # Degenerate line (goal == start or invalid) -> no lateral error
             return 0.0
+        if abs(norm - 1.0) > 1e-6:
+            A /= norm
+            B /= norm
+            C /= norm
 
-        # 4) Sum perpendicular distances
-        cost = 0.0
+        acc = 0.0
         for x, y, _ in trajectory:
-            dist = abs(dy * (x - x0) - dx * (y - y0)) / L
-            cost += dist
-        cost_avg = cost/len(trajectory)
-        return cost_avg
+            acc += abs(A * x + B * y + C)
+
+        return acc / len(trajectory)
+    
+
+    def alignment_cost(self, trajectory, xshift: float = -0.3, yshift: float = 0.0):
+        if not trajectory:
+            return float('inf')
+        
+        path = self.dp.get_gpath_params()
+        if path is None:
+            return float('inf')
+        
+        A = float(path.vector.x)
+        B = float(path.vector.y)
+        C = float(path.vector.z)
+
+        norm = math.hypot(A, B)
+        if norm < 1e-9:
+            # Degenerate line (goal == start or invalid) -> no lateral error
+            return 0.0
+        if abs(norm - 1.0) > 1e-6:
+            A /= norm
+            B /= norm
+            C /= norm
+
+        acc = 0.0
+        for x, y, theta in trajectory:
+            px = x + xshift * math.cos(theta) + yshift * math.cos(theta + math.pi / 2.0)
+            py = y + xshift * math.sin(theta) + yshift * math.sin(theta + math.pi / 2.0)
+            acc += abs(A * px + B * py + C)
+
+        return acc / len(trajectory)
+
 
     def goal_cost(self, trajectory):
         """
@@ -62,6 +99,7 @@ class DistanceCosts:
         # Waypoint coordinates
         x_goal = waypoint.point.x
         y_goal = waypoint.point.y
+        
         # Euclidean distance
         return math.hypot(x_goal - x_end, y_goal - y_end)
         
@@ -81,7 +119,7 @@ class DistanceCosts:
             return float("inf")
 
         # Goal (local waypoint)
-        x_goal = waypoint.point.x
+        x_goal = waypoint.point.x -0.3
         y_goal = waypoint.point.y
 
         # Last trajectory pose
@@ -101,7 +139,8 @@ class DistanceCosts:
         :param waypoint_msg: geometry_msgs/PointStamped of the local goal
         :return: two lists: path_costs, goal_costs
         """
-        path_costs = [self.path_cost(traj) for traj in trajectories]
-        goal_costs = [self.goal_cost(traj) for traj in trajectories]
-        goal_center_costs = [self.goal_center_cost(traj) for traj in trajectories]
-        return path_costs, goal_costs, goal_center_costs
+        path_costs          = [self.path_cost(traj) for traj in trajectories]
+        alignment_costs     = [self.alignment_cost(traj) for traj in trajectories]
+        goal_costs          = [self.goal_cost(traj) for traj in trajectories]
+        goal_center_costs   = [self.goal_center_cost(traj) for traj in trajectories]
+        return path_costs, alignment_costs, goal_costs, goal_center_costs
