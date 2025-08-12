@@ -49,8 +49,8 @@ class TrajectoryGenerator:
         v_max = v_cur + self.acc_lim_v * self.sim_period
         # v_min = 0.
         # v_max = 0.3
-        w_min =  - self.acc_lim_w * self.sim_period
-        w_max =  + self.acc_lim_w * self.sim_period
+        w_min =  w_cur - self.acc_lim_w * self.sim_period
+        w_max =  w_cur + self.acc_lim_w * self.sim_period
         # w_min =  - self.acc_lim_w * self.sim_period
         # w_max =  + self.acc_lim_w * self.sim_period
         
@@ -64,16 +64,20 @@ class TrajectoryGenerator:
 
         self.prev_min= v_min 
         self.prev_max= v_max 
-
+        
         # self.dp._node.get_logger().info(
         #         f'linear_min={v_min}, linear_max={v_max}'
         #     )
         # Discretize into samples
-
         vs = np.linspace(v_min, v_max, self.v_samples)
         ws = np.linspace(w_min, w_max, self.w_samples)
+
+        # to sample (0,0)
+        vs = np.unique(np.concatenate([vs, [0.0]]))
+        ws = np.unique(np.concatenate([ws, [0.0]]))
+        
         V, W = np.meshgrid(vs, ws, indexing='ij')
-        return np.stack((V.ravel(), W.ravel()), axis=1)
+        return np.stack((V.ravel(), W.ravel()), axis=1), v_min, v_max
 
     def generate_trajectories(self):
         """
@@ -91,7 +95,7 @@ class TrajectoryGenerator:
         yaw = math.atan2(siny, cosy)
 
         # Determine velocity samples
-        vel_pairs = self.sample_velocities()
+        vel_pairs, v_min, v_max = self.sample_velocities()
         # Simulate each (v, w) pair
         num_steps = int(self.sim_time / self.dt)
         trajectories = []
@@ -105,4 +109,4 @@ class TrajectoryGenerator:
                 th += w * self.dt
             trajectories.append(traj)
 
-        return vel_pairs, trajectories
+        return vel_pairs, trajectories, v_min, v_max

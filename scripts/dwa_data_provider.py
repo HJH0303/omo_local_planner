@@ -19,3 +19,6 @@ class DataProvider():
 
     def get_waypoint(self):
         return self._node.waypoint
+    
+    def get_gpath_params(self):
+        return getattr(self._node, 'global_path_params', None)
